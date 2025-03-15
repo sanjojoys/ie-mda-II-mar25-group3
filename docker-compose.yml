@@ -1,0 +1,118 @@
+version: "3.8"
+
+services:
+  # ───────────────────────────────────────────
+  # Application container (e.g. Streamlit or similar)
+  # ───────────────────────────────────────────
+  app:
+    container_name: mda-app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    platform: linux/amd64
+    environment:
+      - ENV_VAR=example
+      # Point HDFS_URL to the named container for the namenode below:
+      - HDFS_URL=http://hdfs-namenode:50070
+    depends_on:
+      - zookeeper
+      - kafka
+      - hdfs-namenode
+    ports:
+      - "8000:8000"
+
+  # ───────────────────────────────────────────
+  # Zookeeper
+  # ───────────────────────────────────────────
+  zookeeper:
+    container_name: zookeeper
+    image: confluentinc/cp-zookeeper:latest
+    platform: linux/amd64
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+    ports:
+      - "2181:2181"
+
+  # ───────────────────────────────────────────
+  # Kafka
+  # ───────────────────────────────────────────
+  kafka:
+    container_name: kafka
+    image: confluentinc/cp-kafka
+    platform: linux/amd64
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      # Two listener endpoints: one for external (9092), one internal (9093)
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_INTERNAL://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+
+  # ───────────────────────────────────────────
+  # HDFS NameNode
+  # ───────────────────────────────────────────
+  hdfs-namenode:
+    container_name: hdfs-namenode
+    image: bde2020/hadoop-namenode:2.0.0-hadoop2.7.4-java8
+    platform: linux/amd64
+    environment:
+      - CLUSTER_NAME=testcluster
+      # Advertise the NameNode on hdfs-namenode:50070 (and 8020 inside Docker only)
+      - DFS_NAMENODE_HTTP_ADDRESS=hdfs-namenode:50070
+      - DFS_NAMENODE_RPC_ADDRESS=hdfs-namenode:8020
+    ports:
+      - "50070:50070"
+      # Removed "8020:8020" to avoid port conflict on the host
+
+  # ───────────────────────────────────────────
+  # HDFS DataNode
+  # ───────────────────────────────────────────
+  hdfs-datanode:
+    container_name: hdfs-datanode
+    image: bde2020/hadoop-datanode:2.0.0-hadoop2.7.4-java8
+    platform: linux/amd64
+    environment:
+      - CORE_CONF_fs_defaultFS=hdfs://hdfs-namenode:8020
+      - HDFS_CONF_dfs_datanode_address=0.0.0.0:50010
+      - HDFS_CONF_dfs_datanode_http_address=hdfs-datanode:50075
+      - HDFS_CONF_dfs_datanode_hostname=hdfs-datanode
+      - HDFS_CONF_dfs_datanode_use_datanode_hostname=true
+      - HDFS_CONF_dfs_replication=1
+    depends_on:
+      - hdfs-namenode
+    ports:
+      - "9864:9864"
+
+  # ───────────────────────────────────────────
+  # Spark (Optional Job Container)
+  # ───────────────────────────────────────────
+  spark-job:
+    container_name: spark-job
+    build:
+      context: .
+      dockerfile: Dockerfile.spark
+    platform: linux/amd64
+    depends_on:
+      - kafka
+      - hdfs-namenode
+    environment:
+      # Make sure it references the HDFS namenode container
+      - HDFS_URL=http://hdfs-namenode:50070
+
+  # ───────────────────────────────────────────
+  # Kafka Producer
+  # ───────────────────────────────────────────
+  producer:
+    container_name: kafka-producer
+    build: .
+    platform: linux/amd64
+    environment:
+      # Use the internal listener for Kafka
+      - KAFKA_BROKER=kafka:9093
+    depends_on:
+      - kafka

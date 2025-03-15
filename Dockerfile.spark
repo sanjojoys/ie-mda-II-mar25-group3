@@ -1,0 +1,19 @@
+FROM bitnami/spark:3.5.3
+
+# Step 1: Install curl
+USER root
+RUN apt-get update && apt-get install -y curl ca-certificates && rm -rf /var/lib/apt/lists/*
+
+# Step 2: Download the Kafka connector
+RUN curl -LO https://repo1.maven.org/maven2/org/apache/spark/spark-sql-kafka-0-10_2.12/3.5.3/spark-sql-kafka-0-10_2.12-3.5.3.jar \
+ && mv spark-sql-kafka-0-10_2.12-3.5.3.jar $SPARK_HOME/jars/
+
+# (Optionally get kafka-clients jar too)
+RUN curl -LO https://repo1.maven.org/maven2/org/apache/kafka/kafka-clients/3.5.3/kafka-clients-3.5.3.jar \
+ && mv kafka-clients-3.5.3.jar $SPARK_HOME/jars/
+
+USER 1001
+WORKDIR /app
+COPY spark_streaming_script.py /app/spark_streaming_script.py
+
+CMD [ "spark-submit", "/app/spark_streaming_script.py" ]
