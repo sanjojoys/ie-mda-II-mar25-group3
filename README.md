@@ -1,4 +1,3 @@
-Below is a sample README.md for your project:
 
 # Dating-data dashboard analytics
 
