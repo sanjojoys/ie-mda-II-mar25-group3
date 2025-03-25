@@ -107,3 +107,13 @@ Contributing
 Use clear commit messages. Ensure that only relevant files for your task are included.
 	•	Issue Tracking:
 Use GitHub issues to discuss bugs or enhancements.
+
+
+
+Terraform Deployment (Optional)
+
+If you’d like to provision the Docker containers using Terraform instead of docker-compose, you can use the following example Terraform script.
+Place this in a file (e.g., main.tf), update paths in the volumes section to match your local directory structure, then run:
+
+terraform init
+terraform apply
